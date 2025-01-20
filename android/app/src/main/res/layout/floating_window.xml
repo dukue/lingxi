@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <!-- 小圆球 -->
+    <ImageView
+        android:id="@+id/floating_ball"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/floating_ball_bg"
+        android:elevation="4dp"
+        android:padding="12dp"
+        android:src="@drawable/ic_chat"
+        android:visibility="visible" />
+
+    <!-- 展开后的功能界面 -->
+    <LinearLayout
+        android:id="@+id/expanded_view"
+        android:layout_width="300dp"
+        android:layout_height="400dp"
+        android:background="@drawable/expanded_window_bg"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- 顶部栏 -->
+        <LinearLayout
+            android:id="@+id/header_layout"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/header_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
+            <!-- 风格选择按钮 -->
+            <ImageButton
+                android:id="@+id/btn_style"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/circle_ripple_bg"
+                android:src="@drawable/ic_style"
+                android:padding="8dp"
+                android:contentDescription="选择回复风格" />
+
+            <TextView
+                android:id="@+id/title_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="灵犀AI助手"
+                android:textColor="#333333"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btn_collapse"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/circle_ripple_bg"
+                android:padding="8dp"
+                android:src="@drawable/ic_minimize" />
+        </LinearLayout>
+
+        <!-- 回复模式选择 -->
+        <RadioGroup
+            android:id="@+id/mode_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginVertical="8dp"
+            android:background="@drawable/mode_group_bg"
+            android:orientation="horizontal"
+            android:padding="4dp">
+
+            <RadioButton
+                android:id="@+id/mode_help"
+                style="@style/ModeRadioButton"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="帮回" />
+
+            <RadioButton
+                android:id="@+id/mode_polish"
+                style="@style/ModeRadioButton"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="润色" />
+
+            <RadioButton
+                android:id="@+id/mode_emotion"
+                style="@style/ModeRadioButton"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="情感" />
+        </RadioGroup>
+
+        <!-- 输入提示 -->
+        <TextView
+            android:id="@+id/input_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="4dp"
+            android:text="请输入对方的话："
+            android:textColor="#666666"
+            android:textSize="14sp" />
+
+        <!-- 输入区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/input_message"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/input_bg"
+                android:gravity="top"
+                android:hint="在这里粘贴对方的话..."
+                android:minHeight="40dp"
+                android:maxHeight="80dp"
+                android:padding="8dp"
+                android:textSize="14sp" />
+
+            <ImageButton
+                android:id="@+id/btn_paste"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/circle_ripple_bg"
+                android:src="@drawable/ic_paste" />
+        </LinearLayout>
+
+        <!-- AI回复结果 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginBottom="4dp"
+            android:text="AI回复建议："
+            android:textColor="#666666"
+            android:textSize="14sp" />
+
+        <!-- 加载提示 -->
+        <include
+            android:id="@+id/loading_layout"
+            layout="@layout/loading_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/reply_options_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="12dp"
+            android:clipToPadding="false"
+            android:paddingVertical="4dp" />
+
+        <!-- 底部操作栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bottom_bar_bg"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <Button
+                android:id="@+id/btn_generate"
+                style="@style/ActionButton"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="生成回复" />
+
+            <Button
+                android:id="@+id/btn_regenerate"
+                style="@style/ActionButton.Secondary"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:text="重新生成" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout> 

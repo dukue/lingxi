@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <!-- 用户消息 -->
+    <TextView
+        android:id="@+id/user_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:background="@drawable/user_message_bg"
+        android:maxWidth="240dp"
+        android:padding="12dp"
+        android:textColor="#FFFFFF"
+        android:visibility="gone" />
+
+    <!-- AI消息 -->
+    <TextView
+        android:id="@+id/ai_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:background="@drawable/ai_message_bg"
+        android:maxWidth="240dp"
+        android:padding="12dp"
+        android:textColor="#333333"
+        android:visibility="gone" />
+</LinearLayout> 
