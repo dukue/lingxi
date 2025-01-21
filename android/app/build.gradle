@@ -35,8 +35,15 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        buildConfigField "String", "ARK_API_KEY", "\"${localProperties.getProperty('ark.api.key')}\""
-        buildConfigField "String", "ARK_MODEL_ID", "\"${localProperties.getProperty('ark.model.id')}\""
+        
+        // 从 local.properties 读取配置
+        Properties properties = new Properties()
+        properties.load(project.rootProject.file("local.properties").newDataInputStream())
+        
+        buildConfigField "String", "ARK_API_KEY", "\"${properties.getProperty('ark.api.key')}\""
+        buildConfigField "String", "ARK_CHAT_MODEL_ID", "\"${properties.getProperty('ark.chat.model.id')}\""
+        buildConfigField "String", "ARK_VISION_MODEL_ID", "\"${properties.getProperty('ark.vision.model.id')}\""
+        buildConfigField "String", "ARK_BASE_URL", "\"${properties.getProperty('ark.base.url')}\""
     }
 
     buildTypes {

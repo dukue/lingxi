@@ -4,7 +4,9 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:padding="12dp"
-    android:background="?android:attr/selectableItemBackground">
+    android:clickable="true"
+    android:focusable="true"
+    android:background="@drawable/reply_option_bg_selector">
 
     <TextView
         android:id="@+id/reply_number"
@@ -23,4 +25,5 @@
         android:layout_weight="1"
         android:textSize="16sp"
         android:textColor="#333333" />
+
 </LinearLayout> 

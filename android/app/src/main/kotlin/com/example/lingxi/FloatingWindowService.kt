@@ -40,6 +40,7 @@ import android.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import android.view.Menu
 import android.view.LayoutInflater
+import android.os.Build
 
 class FloatingWindowService : Service() {
     private var windowManager: WindowManager? = null
@@ -65,6 +66,7 @@ class FloatingWindowService : Service() {
     private var longPressRunnable: Runnable? = null
     private var currentStyle = "自然"  // 默认风格
     private var titleText: TextView? = null  // 添加标题文本视图引用
+    private var expandedParams: WindowManager.LayoutParams? = null
     private val styles = listOf(
         "自然" to "以自然的方式回复，保持对话流畅",
         "高情商" to "以高情商的方式回复，展现良好的沟通理解能力和共情能力",
@@ -73,6 +75,9 @@ class FloatingWindowService : Service() {
         "温柔体贴" to "以温柔体贴的方式回复，展现关心和善解人意",
         "简洁干练" to "以简洁干练的方式回复，直接表达核心意思"
     )
+    private var toastView: View? = null
+    private var toastParams: WindowManager.LayoutParams? = null
+    private val toastHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -87,20 +92,47 @@ class FloatingWindowService : Service() {
     }
 
     private fun createFloatingWindow() {
+        // 创建小球视图和展开视图
+        val view = LayoutInflater.from(this).inflate(R.layout.floating_window, null)
+        floatingView = view
+        
+        // 初始化参数
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
-        )
-        
-        params?.gravity = Gravity.TOP or Gravity.START
-        params?.x = 0
-        params?.y = 100
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 100
+        }
 
-        floatingView = LayoutInflater.from(this).inflate(R.layout.floating_window, null)
-        setupChatUI(floatingView!!)
+        // 初始化展开视图参数
+        expandedParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or  // 允许触摸外部
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or  // 监听外部触摸
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,  // 初始不获取焦点
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 100
+        }
+
+        setupChatUI(view)
         
         // 获取屏幕尺寸
         val display = windowManager?.defaultDisplay
@@ -109,9 +141,9 @@ class FloatingWindowService : Service() {
         val screenWidth = size.x
         
         // 设置触摸事件
-        val floatingBall = floatingView?.findViewById<View>(R.id.floating_ball)
-        val expandedView = floatingView?.findViewById<View>(R.id.expanded_view)
-        val headerView = floatingView?.findViewById<View>(R.id.header_layout)
+        val floatingBall = view.findViewById<View>(R.id.floating_ball)
+        val expandedView = view.findViewById<View>(R.id.expanded_view)
+        val headerView = view.findViewById<View>(R.id.header_layout)
 
         // 小圆球的触摸事件
         floatingBall?.setOnTouchListener(createTouchListener(screenWidth, floatingBall, expandedView))
@@ -120,11 +152,11 @@ class FloatingWindowService : Service() {
         headerView?.setOnTouchListener(createTouchListener(screenWidth, floatingBall, expandedView))
 
         // 设置最小化按钮
-        floatingView?.findViewById<View>(R.id.btn_collapse)?.setOnClickListener {
+        view.findViewById<View>(R.id.btn_collapse)?.setOnClickListener {
             floatingBall?.visibility = View.VISIBLE
             expandedView?.visibility = View.GONE
-            params?.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-            windowManager?.updateViewLayout(floatingView, params)
+            // 使用小球的参数
+            windowManager?.updateViewLayout(view, params)
         }
 
         // 创建关闭区域视图
@@ -132,7 +164,10 @@ class FloatingWindowService : Service() {
         closeViewParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -141,7 +176,8 @@ class FloatingWindowService : Service() {
             gravity = Gravity.BOTTOM
         }
 
-        windowManager?.addView(floatingView, params)
+        // 使用小球的参数初始显示
+        windowManager?.addView(view, params)
     }
 
     private fun animateToEdge(targetX: Int) {
@@ -173,6 +209,58 @@ class FloatingWindowService : Service() {
         val inputHint = view.findViewById<TextView>(R.id.input_hint)
         val modeGroup = view.findViewById<RadioGroup>(R.id.mode_group)
         val replyOptionsList = view.findViewById<RecyclerView>(R.id.reply_options_list)
+
+        // 添加输入框焦点监听
+        inputMessage.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                // 获得焦点时移除 FLAG_NOT_FOCUSABLE 标志
+                expandedParams?.flags = expandedParams?.flags?.and(
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                ) ?: 0
+                windowManager?.updateViewLayout(floatingView, expandedParams)
+            } else {
+                // 失去焦点时恢复 FLAG_NOT_FOCUSABLE 标志
+                expandedParams?.flags = expandedParams?.flags?.or(
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                ) ?: 0
+                windowManager?.updateViewLayout(floatingView, expandedParams)
+            }
+        }
+
+        // 修改粘贴按钮点击事件
+        btnPaste?.setOnClickListener {
+            val clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipData = clipboardManager.primaryClip
+            if (clipData != null && clipData.itemCount > 0) {
+                val text = clipData.getItemAt(0).text
+                if (text != null) {
+                    // 设置文本前请求焦点并移除 FLAG_NOT_FOCUSABLE
+                    inputMessage.requestFocus()
+                    expandedParams?.flags = expandedParams?.flags?.and(
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                    ) ?: 0
+                    windowManager?.updateViewLayout(floatingView, expandedParams)
+                    
+                    // 设置文本
+                    inputMessage.setText(text)
+                    inputMessage.setSelection(text.length)
+                    
+                    Toast.makeText(this, "已粘贴", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "剪贴板为空", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // 输入框点击事件
+        inputMessage.setOnClickListener {
+            // 点击时请求焦点并移除 FLAG_NOT_FOCUSABLE
+            it.requestFocus()
+            expandedParams?.flags = expandedParams?.flags?.and(
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            ) ?: 0
+            windowManager?.updateViewLayout(floatingView, expandedParams)
+        }
 
         // 模式切换监听
         modeGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -220,7 +308,7 @@ class FloatingWindowService : Service() {
             updateTitle()  // 更新标题
             
             // 显示选中提示
-            Toast.makeText(this, "已切换到${currentStyle}风格", Toast.LENGTH_SHORT).show()
+            showCustomToast("已切换到${currentStyle}风格")
             true
         }
 
@@ -230,7 +318,7 @@ class FloatingWindowService : Service() {
 
         // 添加长按提示
         btnStyle.setOnLongClickListener {
-            Toast.makeText(this, "当前风格：$currentStyle", Toast.LENGTH_SHORT).show()
+            showCustomToast("当前风格：$currentStyle")
             true
         }
 
@@ -242,27 +330,6 @@ class FloatingWindowService : Service() {
                 val stylePrompt = styles.find { it.first == currentStyle }?.second
                 generateReply(inputMessage, stylePrompt)
             }
-        }
-
-        // 添加粘贴按钮点击事件
-        btnPaste.setOnClickListener {
-            val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-            if (clipboardManager.hasPrimaryClip()) {
-                val clipData = clipboardManager.primaryClip
-                val text = clipData?.getItemAt(0)?.text?.toString()
-                if (text != null) {
-                    // 移除中括号
-                    val cleanText = text.replace("[", "").replace("]", "")
-                    inputMessage.setText(cleanText)
-                    Toast.makeText(this, "已粘贴剪切板内容", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        // 重新生成按钮点击事件
-        btnRegenerate.setOnClickListener {
-            // 使用上一次的模式重新生成
-            generateReply(inputMessage.toString(), currentMode)
         }
 
         replyOptionsList.layoutManager = LinearLayoutManager(this)
@@ -296,13 +363,19 @@ class FloatingWindowService : Service() {
 
     private fun generateReply(message: String, stylePrompt: String?) {
         if (message.isBlank()) {
-            Toast.makeText(this, "请先输入内容", Toast.LENGTH_SHORT).show()
+            showCustomToast("请先输入内容")
             return
         }
 
+        // 获取输入框引用
+        val inputMessage = floatingView?.findViewById<EditText>(R.id.input_message)
+
         // 显示加载提示
         loadingView?.visibility = View.VISIBLE
-        replyOptionsAdapter?.setOptions(emptyList(), currentMode)
+        replyOptionsAdapter?.updateOptions(emptyList(), currentMode)
+
+        // 清空输入框
+        inputMessage?.setText("")
 
         // 根据不同模式构建 prompt
         val prompt = when (currentMode) {
@@ -363,10 +436,10 @@ class FloatingWindowService : Service() {
                     when (currentMode) {
                         "help" -> {
                             val options = parseReplyOptions(response)
-                            replyOptionsAdapter?.setOptions(options, currentMode)
+                            replyOptionsAdapter?.updateOptions(options, currentMode)
                         }
                         "polish" -> {
-                            replyOptionsAdapter?.setOptions(listOf(response.trim()), currentMode)
+                            replyOptionsAdapter?.updateOptions(listOf(response.trim()), currentMode)
                         }
                         "emotion" -> {
                             // 处理情感模式的回复，保持格式
@@ -374,10 +447,10 @@ class FloatingWindowService : Service() {
                                 .replace("【", "\n【")  // 确保每个段落前有换行
                                 .replace("】", "】\n")  // 确保每个标题后有换行
                                 .trim()
-                            replyOptionsAdapter?.setOptions(listOf(formattedResponse), currentMode)
+                            replyOptionsAdapter?.updateOptions(listOf(formattedResponse), currentMode)
                         }
                         else -> {
-                            replyOptionsAdapter?.setOptions(listOf(response), currentMode)
+                            replyOptionsAdapter?.updateOptions(listOf(response), currentMode)
                         }
                     }
                 }
@@ -385,7 +458,7 @@ class FloatingWindowService : Service() {
                 withContext(Dispatchers.Main) {
                     // 隐藏加载提示
                     loadingView?.visibility = View.GONE
-                    replyOptionsAdapter?.setOptions(listOf("生成回复失败：${e.message}"), currentMode)
+                    replyOptionsAdapter?.updateOptions(listOf("生成回复失败：${e.message}"), currentMode)
                 }
             }
         }
@@ -400,7 +473,7 @@ class FloatingWindowService : Service() {
     private suspend fun callArkAPI(content: String): String {
         val client = OkHttpClient()
         val json = JSONObject().apply {
-            put("model", BuildConfig.ARK_MODEL_ID)
+            put("model", BuildConfig.ARK_CHAT_MODEL_ID)
             put("messages", JSONArray().apply {
                 put(JSONObject().apply {
                     put("role", "system")
@@ -414,7 +487,7 @@ class FloatingWindowService : Service() {
         }
 
         val request = Request.Builder()
-            .url("https://ark.cn-beijing.volces.com/api/v3/chat/completions")
+            .url(BuildConfig.ARK_BASE_URL)
             .addHeader("Content-Type", "application/json")
             .addHeader("Authorization", "Bearer ${BuildConfig.ARK_API_KEY}")
             .post(json.toString().toRequestBody("application/json".toMediaType()))
@@ -448,8 +521,10 @@ class FloatingWindowService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        hideCustomToast()
         closeView?.let { if (it.parent != null) windowManager?.removeView(it) }
         floatingView?.let { if (it.parent != null) windowManager?.removeView(it) }
+        toastHandler.removeCallbacksAndMessages(null)
     }
 
     // 抽取触摸事件处理逻辑为单独的方法
@@ -531,13 +606,12 @@ class FloatingWindowService : Service() {
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-                    } else if (!isMoving && System.currentTimeMillis() - lastClickTime < 200) {
-                        // 点击事件处理
+                    } else if (!isMoving && (System.currentTimeMillis() - lastClickTime) < 200) {
                         if (floatingBall?.visibility == View.VISIBLE) {
                             floatingBall.visibility = View.GONE
                             expandedView?.visibility = View.VISIBLE
-                            params?.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                            windowManager?.updateViewLayout(floatingView, params)
+                            // 使用展开视图的参数
+                            windowManager?.updateViewLayout(floatingView, expandedParams)
                         }
                     } else if (floatingBall?.visibility == View.VISIBLE) {
                         // 贴边动画
@@ -571,6 +645,54 @@ class FloatingWindowService : Service() {
             intent.setPackage(packageName)
             sendBroadcast(intent)
             
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // 将 showCustomToast 改为内部方法
+    internal fun showCustomToast(message: String) {
+        try {
+            // 移除现有的 Toast
+            hideCustomToast()
+            
+            // 创建新的 Toast 视图
+            toastView = LayoutInflater.from(this).inflate(R.layout.custom_toast, null)
+            toastView?.findViewById<TextView>(R.id.toast_text)?.text = message
+            
+            // 设置布局参数
+            toastParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                y = 100 // 距离底部的距离
+            }
+            
+            // 显示 Toast
+            windowManager?.addView(toastView, toastParams)
+            
+            // 2秒后自动隐藏
+            toastHandler.postDelayed({
+                hideCustomToast()
+            }, 2000)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun hideCustomToast() {
+        try {
+            if (toastView?.parent != null) {
+                windowManager?.removeView(toastView)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -624,17 +746,12 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.MessageViewHolder>() {
 }
 
 // 添加回复选项适配器
-class ReplyOptionsAdapter : RecyclerView.Adapter<ReplyOptionsAdapter.ViewHolder>() {
-    private val _options = mutableListOf<String>()
-    val options: List<String> get() = _options.toList()
-    
-    // 添加当前模式属性
-    var currentMode: String = "help"
-        private set
-    
-    fun setOptions(newOptions: List<String>, mode: String = "help") {
-        _options.clear()
-        _options.addAll(newOptions)
+private class ReplyOptionsAdapter : RecyclerView.Adapter<ReplyOptionsAdapter.ViewHolder>() {
+    private var _options = listOf<String>()
+    private var currentMode: String = "normal"
+
+    fun updateOptions(newOptions: List<String>, mode: String) {
+        _options = newOptions
         currentMode = mode
         notifyDataSetChanged()
     }
@@ -646,24 +763,36 @@ class ReplyOptionsAdapter : RecyclerView.Adapter<ReplyOptionsAdapter.ViewHolder>
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val option = options[position]
+        val option = _options[position]
         holder.bind(option, position, currentMode)
     }
 
     override fun getItemCount() = _options.size
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val numberView: TextView = view.findViewById(R.id.reply_number)
-        val optionText: TextView = view.findViewById(R.id.reply_option)
+        private val numberView: TextView = view.findViewById(R.id.reply_number)
+        private val optionText: TextView = view.findViewById(R.id.reply_option)
 
         fun bind(option: String, position: Int, mode: String) {
             itemView.setOnClickListener {
                 val clipboardManager = itemView.context
                     .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("AI回复", option)
+                val textToCopy = when (mode) {
+                    "polish" -> option
+                    else -> option.replaceFirst(Regex("^\\d+\\.\\s*"), "")
+                        .removeSurrounding("[", "]")
+                }
+                val clip = ClipData.newPlainText("AI回复", textToCopy)
                 clipboardManager.setPrimaryClip(clip)
-                Toast.makeText(itemView.context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                
+                // 使用自定义 Toast
+                (itemView.context as FloatingWindowService).showCustomToast("已复制到剪贴板")
             }
+            // 设置点击反馈
+            itemView.background = ContextCompat.getDrawable(
+                itemView.context, 
+                R.drawable.reply_option_bg_selector
+            )
 
             when (mode) {
                 "polish" -> {

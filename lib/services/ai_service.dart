@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/services.dart';
 
 abstract class AIService {
   Future<String> generateReply({
@@ -16,10 +17,42 @@ abstract class AIService {
 }
 
 class ArkAIService implements AIService {
-  static const String _apiKey = '213213f4-ed27-4ec9-8f6e-86a536bc9472';
-  static const String _chatModelId = 'ep-20250119143157-mf7sf';  // 用于文本聊天
-  static const String _visionModelId = 'ep-20250119185126-p748w';  // 用于图像识别
-  static const String _baseUrl = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+  static String? _apiKey;
+  static String? _chatModelId;
+  static String? _visionModelId;
+  static String? _baseUrl;
+  
+  // 初始化配置
+  static Future<void> initialize() async {
+    try {
+      const platform = MethodChannel('com.example.lingxi/config');
+      final dynamic rawConfig = await platform.invokeMethod('getConfig');
+      
+      final Map<String, dynamic> config = Map<String, dynamic>.from(rawConfig as Map);
+      
+      _apiKey = config['ark.api.key'] as String?;
+      _chatModelId = config['ark.chat.model.id'] as String?;
+      _visionModelId = config['ark.vision.model.id'] as String?;
+      _baseUrl = config['ark.base.url'] as String?;
+      
+      if (_apiKey == null || _chatModelId == null || 
+          _visionModelId == null || _baseUrl == null) {
+        throw Exception('配置加载失败: 部分配置项为空');
+      }
+      
+      // 验证配置是否有效
+      if (_apiKey!.isEmpty || _chatModelId!.isEmpty || 
+          _visionModelId!.isEmpty || _baseUrl!.isEmpty) {
+        throw Exception('配置无效: 存在空值');
+      }
+      
+      print('ArkAIService initialized successfully');
+      print('Config loaded: $config');
+    } catch (e) {
+      print('ArkAIService initialization failed: $e');
+      rethrow;
+    }
+  }
 
   @override
   Future<String> generateReply({
@@ -29,13 +62,13 @@ class ArkAIService implements AIService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse(_baseUrl),
+        Uri.parse(_baseUrl!),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
+          'Authorization': 'Bearer $_apiKey!',
         },
         body: jsonEncode({
-          'model': _chatModelId,  // 使用文本聊天模型
+          'model': _chatModelId!,  // 使用文本聊天模型
           'messages': [
             {
               'role': 'system',
@@ -98,13 +131,13 @@ class ArkAIService implements AIService {
       }
 
       final response = await http.post(
-        Uri.parse(_baseUrl),
+        Uri.parse(_baseUrl!),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
+          'Authorization': 'Bearer $_apiKey!',
         },
         body: jsonEncode({
-          'model': _visionModelId,
+          'model': _visionModelId!,
           'messages': [
             {
               'role': 'system',

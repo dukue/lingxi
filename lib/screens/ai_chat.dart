@@ -55,60 +55,82 @@ class _AIChatState extends State<AIChat> {
   }
 
   Future<void> _analyzeImages() async {
-    if (_selectedImages.isEmpty) return;
-
     setState(() {
       _isLoading = true;
-      _aiResponse = null;
-      _aiResponseList.clear();
     });
 
     try {
-      final base64Images = await _imagesToBase64(_selectedImages);
-      
-      // 根据选择的风格调整提示词
-      String stylePrompt = '';
-      switch (_selectedStyle) {
-        case '高情商':
-          stylePrompt = '以高情商的方式回复，展现良好的沟通理解能力和共情能力';
-          break;
-        case '幽默风趣':
-          stylePrompt = '以幽默风趣的方式回复，适当加入一些俏皮话或有趣的表达';
-          break;
-        case '正式礼貌':
-          stylePrompt = '以正式礼貌的方式回复，保持适当的距离感和尊重';
-          break;
-        case '温柔体贴':
-          stylePrompt = '以温柔体贴的方式回复，展现关心和善解人意';
-          break;
-        case '简洁干练':
-          stylePrompt = '以简洁干练的方式回复，直接表达核心意思';
-          break;
-        default:
-          stylePrompt = '以自然的方式回复，保持对话流畅';
+      // 保存当前输入内容
+      final additionalText = _messageController.text;
+
+      // 清空输入框
+      _messageController.clear();
+
+      // 转换图片为 base64
+      List<String> base64Images = [];
+      for (File image in _selectedImages) {
+        final bytes = await image.readAsBytes();
+        final base64Image = 'data:image/jpeg;base64,${base64.encode(bytes)}';
+        base64Images.add(base64Image);
       }
-      
-      final response = await ArkAIService().analyzeChatImages(
-        base64Images, 
-        _messageController.text.trim(),
-        stylePrompt: stylePrompt,
+
+      // 调用 AI 服务
+      final aiService = ArkAIService();
+      final response = await aiService.analyzeChatImages(
+        base64Images,
+        additionalText,
+        stylePrompt: _selectedStyle == '自然' ? null : _selectedStyle,
       );
-      
-      final suggestions = response.split('\n').where((line) {
-        final trimmed = line.trim();
-        return trimmed.isNotEmpty && RegExp(r'^\d+\.').hasMatch(trimmed);
-      }).toList();
 
       setState(() {
         _aiResponse = response;
-        _aiResponseList = suggestions;
+        _aiResponseList = response.split('\n');
+        _isLoading = false;
+        _selectedImages.clear(); // 清空已选图片
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _aiResponse = '分析失败：$e';
+      });
+    }
+  }
+
+  // 添加文本发送方法
+  Future<void> _sendMessage() async {
+    if (_messageController.text.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 保存当前输入内容
+      final message = _messageController.text;
+
+      // 清空输入框
+      _messageController.clear();
+
+      // 调用 AI 服务
+      final aiService = ArkAIService();
+      final response = await aiService.generateReply(
+        content: message,
+        rolePrompt: _selectedStyle == '自然' ? 
+            '以自然的方式回复' : 
+            '以${_selectedStyle}的方式回复',
+      );
+
+      setState(() {
+        _aiResponse = response;
+        _aiResponseList = response.split('\n');
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _aiResponse = "分析图片失败: $e";
-        _aiResponseList.clear();
         _isLoading = false;
+        _aiResponse = '发送失败：$e';
       });
     }
   }
