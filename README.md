@@ -65,7 +65,7 @@ flutter pub get
 
 3. 配置 API 密钥
 
-  以下秘钥和模型id都可以在火山方舟平台[www.volcengine.com]申请，每种模型都提供了50万的免费额度
+  以下秘钥和模型id都可以在[火山方舟平台](www.volcengine.com)申请，每种模型都提供了50万的免费额度
 
   使用了不同的两个模型是为了节省带OCR识别模型的token，ark.vision.model.id是带图像识别的，ark.chat.model.id是纯文本的
 
